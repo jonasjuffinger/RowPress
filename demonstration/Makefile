@@ -6,10 +6,12 @@ ALGO2OBJS := $(ALGO2SOURCES:.cpp=.o)
 
 CFLAGS := -std=c++11 -g -O3 -DTIME_GLOBAL -DUSE_RDTSC
 
-all: demo-algo1 demo-algo2
+#all: demo-algo1 demo-algo2
 
-demo-algo1: $(ALGO1OBJS)
-	$(CXX) $(CFLAGS) -o demo-algo1 $(ALGO1OBJS) $(LFLAGS) $(LIBS)
+#demo-algo1: $(ALGO1OBJS)
+#	$(CXX) $(CFLAGS) -o demo-algo1 $(ALGO1OBJS) $(LFLAGS) $(LIBS)
+
+all: demo-algo2
 
 demo-algo2: $(ALGO2OBJS)
 	$(CXX) $(CFLAGS) -o demo-algo2 $(ALGO2OBJS) $(LFLAGS) $(LIBS)

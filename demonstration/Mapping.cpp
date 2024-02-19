@@ -6,25 +6,25 @@ void Mapping::decode_new_address(uintptr_t addr)
 {
     auto p = addr;
     int res = 0;
-    for (unsigned long i : dual_rank.DRAM_MTX) {
+    for (unsigned long i : mem_configuration->DRAM_MTX) {
         res <<= 1ULL;
         res |= (int) __builtin_parityl(p & i);
     }
-    bank = (res >> dual_rank.BK_SHIFT) & dual_rank.BK_MASK;
-    row = (res >> dual_rank.ROW_SHIFT) & dual_rank.ROW_MASK;
-    column = (res >> dual_rank.COL_SHIFT) & dual_rank.COL_MASK;
+    bank = (res >> mem_configuration->BK_SHIFT) & mem_configuration->BK_MASK;
+    row = (res >> mem_configuration->ROW_SHIFT) & mem_configuration->ROW_MASK;
+    column = (res >> mem_configuration->COL_SHIFT) & mem_configuration->COL_MASK;
 }
 
 int Mapping::linearize() {
-  return (this->bank << dual_rank.BK_SHIFT) 
-        | (this->row << dual_rank.ROW_SHIFT) 
-        | (this->column << dual_rank.COL_SHIFT);
+  return (this->bank << mem_configuration->BK_SHIFT) 
+        | (this->row << mem_configuration->ROW_SHIFT) 
+        | (this->column << mem_configuration->COL_SHIFT);
 }
 
 uintptr_t Mapping::to_virt() {
   int res = 0;
   int l = this->linearize();
-  for (unsigned long i : dual_rank.ADDR_MTX) {
+  for (unsigned long i : mem_configuration->ADDR_MTX) {
     res <<= 1ULL;
     res |= (int) __builtin_parityl(l & i);
   }

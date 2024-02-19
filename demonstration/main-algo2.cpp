@@ -26,6 +26,9 @@ std::vector<std::pair<ulong, ulong>> hypothetically_conflicting_addresses;
 
 std::vector<unsigned long long> record;
 
+std::ofstream output_file;
+
+
 void dump_record(std::string fn)
 {
     // dump all record entries to binary file
@@ -42,13 +45,54 @@ uintptr_t generate_random_address(uintptr_t arr, std::uniform_int_distribution<u
     return arr + row_offset * (8192);
 }
 
-int check_bit_flips(Mapping &victim, unsigned long long victim_data)
+// Extract the physical page number from a Linux /proc/PID/pagemap entry.
+uint64_t frame_number_from_pagemap(uint64_t value) {
+  return value & ((1ULL << 54) - 1);
+}
+
+uint64_t get_physical_addr(uintptr_t virtual_addr) {
+  int fd = open("/proc/self/pagemap", O_RDONLY);
+  assert(fd >= 0);
+
+  off_t pos = lseek(fd, (virtual_addr / 0x1000) * 8, SEEK_SET);
+  assert(pos >= 0);
+  uint64_t value;
+  int got = read(fd, &value, 8);
+  assert(got == 8);
+  int rc = close(fd);
+  assert(rc == 0);
+
+  // Check the "page present" flag.
+  assert(value & (1ULL << 63));
+
+  uint64_t frame_num = frame_number_from_pagemap(value);
+  return (frame_num * 0x1000) | (virtual_addr & (0x1000 - 1));
+}
+
+int check_bit_flips(Mapping &victim, unsigned long long victim_data, int no_aggr_acts, int no_reads)
 {
     int no_bit_flips = 0;
     for (int i = 0 ; i < 8192/sizeof(unsigned long long) ; i++)
     {
+        uintptr_t victim_ptr = victim.to_virt();
+        unsigned long long new_data = *(unsigned long long*) victim_ptr;
+
+        if ((new_data ^ victim_data) != 0) {
+            uintptr_t victim_phys = get_physical_addr(victim_ptr);
+
+            output_file << "phys_addr,data,flip_data,no_aggr_acts,no_reads" << std::endl;
+            output_file << std::hex
+                        << victim_phys << ","
+                        << victim_data << ","
+                        << new_data << ","
+                        << std::dec
+                        << no_aggr_acts << ","
+                        << no_reads << ","
+                        << std::endl;
+        }
+
         //std::cout << std::hex << (*(unsigned long long*) victim.to_virt()) << std::dec << std::endl;
-        no_bit_flips += __builtin_popcountll((*(unsigned long long*) victim.to_virt()) ^ victim_data);
+        no_bit_flips += __builtin_popcountll(new_data ^ victim_data);
         victim.increment_column_dw();
     }
     victim.reset_column();
@@ -376,7 +420,7 @@ int do_samsung_utrr(uintptr_t target, int no_aggr_acts, int no_reads, int victim
             sched_yield();
         
         // accumulate the total number of bitflips with the given activation count & read number across all tested victim rows
-        int bitflips = check_bit_flips(victim, 0x5555555555555555ULL);
+        int bitflips = check_bit_flips(victim, 0x5555555555555555ULL, no_aggr_acts, no_reads);
         total_bitflips += bitflips;
         // std::cout << "Victim " << victim.get_row() << " done. " << std::endl; 
 
@@ -596,11 +640,16 @@ int verify_tAggOn(uintptr_t target)
     }
     // close the file
     latency_file.close();
+
+    return 0;
 }
 
 void physical_address_hammer(bool is_verify, int victim_count)
 {
     std::cout << "Running Algorithm 2..." << std::endl;
+
+    output_file.open("bitflips.csv", std::ofstream::out);
+    output_file << "phys_addr,data,flip_data,no_aggr_acts,no_reads" << std::endl;
 
     // Allocate a large contiguous chunk of memory
     ulong MEM_SIZE = 1ULL << 30ULL;
